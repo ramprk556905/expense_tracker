@@ -78,9 +78,23 @@ export default function App() {
 
   const filteredExpenses = expenses.filter(e => e.date.startsWith(filterMonth))
 
-  const totalIncome = filteredExpenses.filter(e => e.type === 'income').reduce((s, e) => s + e.amount, 0)
+  // Salary received at end of previous month funds this month's expenses
+  const prevMonth = (() => {
+    const [y, m] = filterMonth.split('-').map(Number)
+    const d = new Date(y, m - 2, 1)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })()
+  const prevMonthLabel = (() => {
+    const [y, m] = prevMonth.split('-').map(Number)
+    return new Date(y, m - 1, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+  })()
+
+  const budget = expenses
+    .filter(e => e.date.startsWith(prevMonth) && e.type === 'income')
+    .reduce((s, e) => s + e.amount, 0)
+
   const totalExpenses = filteredExpenses.filter(e => e.type === 'expense').reduce((s, e) => s + e.amount, 0)
-  const balance = totalIncome - totalExpenses
+  const remaining = budget - totalExpenses
 
   const buildCSV = (rows) => {
     const headers = ['Date', 'Description', 'Category', 'Type', 'Amount (INR)']
@@ -133,10 +147,11 @@ export default function App() {
         </div>
 
         <Summary
-          balance={balance}
-          totalIncome={totalIncome}
+          budget={budget}
           totalExpenses={totalExpenses}
+          remaining={remaining}
           count={filteredExpenses.length}
+          prevMonthLabel={prevMonthLabel}
         />
 
         {activeTab === 'dashboard' && (
