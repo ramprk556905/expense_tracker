@@ -5,17 +5,42 @@ const BASE_URL = configuredBaseUrl
     ? 'http://localhost:8000'
     : window.location.origin
 
-const getToken = () => localStorage.getItem('et_token')
-const setToken = (token) => localStorage.setItem('et_token', token)
+const storages = [sessionStorage, localStorage]
+
+const getStoredValue = (key) => {
+  for (const storage of storages) {
+    const value = storage.getItem(key)
+    if (value) return value
+  }
+  return null
+}
+
+const clearSession = () => {
+  for (const storage of storages) {
+    storage.removeItem('et_token')
+    storage.removeItem('et_user')
+  }
+}
+
+const getToken = () => getStoredValue('et_token')
 const getUser = () => {
+  const raw = getStoredValue('et_user')
+  if (!raw) return null
+
   try {
-    return JSON.parse(localStorage.getItem('et_user') || 'null')
+    return JSON.parse(raw)
   } catch {
-    localStorage.removeItem('et_user')
+    clearSession()
     return null
   }
 }
-const setUser = (user) => localStorage.setItem('et_user', JSON.stringify(user))
+
+const persistSession = (token, user, rememberMe) => {
+  clearSession()
+  const storage = rememberMe ? localStorage : sessionStorage
+  storage.setItem('et_token', token)
+  storage.setItem('et_user', JSON.stringify(user))
+}
 
 async function request(method, path, body) {
   const token = getToken()
@@ -33,8 +58,7 @@ async function request(method, path, body) {
   const data = isJson ? await response.json().catch(() => ({})) : null
 
   if (response.status === 401) {
-    localStorage.removeItem('et_token')
-    localStorage.removeItem('et_user')
+    clearSession()
     window.location.reload()
     return
   }
@@ -55,25 +79,41 @@ async function request(method, path, body) {
 export const api = {
   getUser,
 
-  async login(email, password) {
-    const data = await request('POST', '/auth/login', { email, password })
-    setToken(data.access_token)
-    setUser({ email: data.email })
+  async login(email, password, rememberMe) {
+    const data = await request('POST', '/auth/login', { email, password, remember_me: rememberMe })
+    persistSession(data.access_token, { email: data.email, rememberMe: data.remember_me }, data.remember_me)
     return data
   },
 
-  async register(email, password) {
-    const data = await request('POST', '/auth/register', { email, password })
-    setToken(data.access_token)
-    setUser({ email: data.email })
+  async register(email, password, rememberMe) {
+    const data = await request('POST', '/auth/register', { email, password, remember_me: rememberMe })
+    persistSession(data.access_token, { email: data.email, rememberMe: data.remember_me }, data.remember_me)
     return data
   },
 
-  logout() {
-    localStorage.removeItem('et_token')
-    localStorage.removeItem('et_user')
+  async forgotPassword(email) {
+    return request('POST', '/auth/forgot-password', { email })
   },
 
+  async resetPassword(email, code, newPassword) {
+    return request('POST', '/auth/reset-password', {
+      email,
+      code,
+      new_password: newPassword,
+    })
+  },
+
+  async logout() {
+    try {
+      await request('POST', '/auth/logout')
+    } catch {
+      // Best-effort logout: local cleanup still matters if the backend session is already gone.
+    } finally {
+      clearSession()
+    }
+  },
+
+  getAuthHistory: () => request('GET', '/auth/history'),
   getExpenses: () => request('GET', '/expenses'),
   addExpense: (data) => request('POST', '/expenses', data),
   updateExpense: (id, data) => request('PUT', `/expenses/${id}`, data),

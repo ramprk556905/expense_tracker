@@ -24,6 +24,7 @@ export default function Header({ activeTab, setActiveTab, onAdd, user, onLogout 
             <div className="user-avatar" title={user?.email}>{initials}</div>
             <div className="user-dropdown">
               <div className="user-email">{user?.email}</div>
+              <div className="user-email">Session: {user?.rememberMe ? 'Remembered on this device' : 'This browser only'}</div>
               <button className="logout-btn" onClick={onLogout}>Sign Out</button>
             </div>
           </div>

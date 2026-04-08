@@ -9,12 +9,15 @@ import ExpenseList from './components/ExpenseList'
 import CategoryChart from './components/CategoryChart'
 import MonthlyChart from './components/MonthlyChart'
 import CSVImport from './components/CSVImport'
+import LoginHistory from './components/LoginHistory'
 import './App.css'
 
 export default function App() {
   const [user, setUser] = useState(api.getUser)
   const [expenses, setExpenses] = useState([])
+  const [authHistory, setAuthHistory] = useState([])
   const [dataLoading, setDataLoading] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [editingExpense, setEditingExpense] = useState(null)
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -35,17 +38,35 @@ export default function App() {
     }
   }, [])
 
+  const loadAuthHistory = useCallback(async () => {
+    setHistoryLoading(true)
+    try {
+      const data = await api.getAuthHistory()
+      setAuthHistory(Array.isArray(data) ? data : [])
+    } catch {
+      setAuthHistory([])
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
-    if (user) loadExpenses()
-    else setExpenses([])
-  }, [user, loadExpenses])
+    if (user) {
+      loadExpenses()
+      loadAuthHistory()
+    } else {
+      setExpenses([])
+      setAuthHistory([])
+    }
+  }, [user, loadExpenses, loadAuthHistory])
 
   const handleLoginSuccess = (userData) => setUser(userData)
 
-  const handleLogout = () => {
-    api.logout()
+  const handleLogout = async () => {
+    await api.logout()
     setUser(null)
     setExpenses([])
+    setAuthHistory([])
   }
 
   const addExpense = async (data) => {
@@ -200,10 +221,14 @@ export default function App() {
             />
 
             {activeTab === 'dashboard' && (
-              <div className="dashboard-grid">
-                <CategoryChart expenses={filteredExpenses} />
-                <MonthlyChart expenses={safeExpenses} />
-              </div>
+              <>
+                <div className="dashboard-grid">
+                  <CategoryChart expenses={filteredExpenses} />
+                  <MonthlyChart expenses={safeExpenses} />
+                </div>
+
+                <LoginHistory history={authHistory} loading={historyLoading} />
+              </>
             )}
 
             {activeTab === 'transactions' && (
