@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-export default function Header({ activeTab, setActiveTab, onAdd, user, onLogout }) {
+export default function Header({ activeTab, setActiveTab, onAdd, user, onLogout, onOpenSettings }) {
   const initials = user?.email?.slice(0, 2).toUpperCase() ?? '??'
   const [menuOpen, setMenuOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
@@ -29,6 +29,11 @@ export default function Header({ activeTab, setActiveTab, onAdd, user, onLogout 
     }
   }
 
+  const handleOpenSettingsClick = () => {
+    setMenuOpen(false)
+    onOpenSettings?.()
+  }
+
   return (
     <header className="header">
       <div className="header-inner">
@@ -43,9 +48,6 @@ export default function Header({ activeTab, setActiveTab, onAdd, user, onLogout 
           </button>
           <button className={`nav-btn ${activeTab === 'transactions' ? 'active' : ''}`} onClick={() => setActiveTab('transactions')}>
             Transactions
-          </button>
-          <button className={`nav-btn ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
-            Settings
           </button>
         </nav>
 
@@ -63,6 +65,9 @@ export default function Header({ activeTab, setActiveTab, onAdd, user, onLogout 
             <div className="user-dropdown">
               <div className="user-email">{user?.email}</div>
               <div className="user-email">Session: {user?.rememberMe ? 'Remembered on this device' : 'This browser only'}</div>
+              <button type="button" className="settings-menu-btn" onClick={handleOpenSettingsClick}>
+                Account Settings
+              </button>
               <button type="button" className="logout-btn" onClick={handleLogoutClick} disabled={loggingOut}>
                 {loggingOut ? 'Signing out...' : 'Sign Out'}
               </button>

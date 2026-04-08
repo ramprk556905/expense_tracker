@@ -138,6 +138,22 @@
   opacity: 0.7;
 }
 
+.settings-menu-btn {
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-menu-btn:hover {
+  background: #f8fafc;
+}
+
 /* ── Import toast ── */
 .import-toast {
   position: absolute;
@@ -567,6 +583,18 @@
   max-width: 460px;
   box-shadow: var(--shadow-lg);
   animation: slideUp .2s;
+}
+
+.settings-modal {
+  max-width: 880px;
+  max-height: min(88vh, 920px);
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-modal-body {
+  padding: 0 24px 24px;
+  overflow-y: auto;
 }
 
 @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }

@@ -20,6 +20,7 @@ export default function App() {
   const [dataLoading, setDataLoading] = useState(false)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const [editingExpense, setEditingExpense] = useState(null)
   const [activeTab, setActiveTab] = useState('dashboard')
   const [notification, setNotification] = useState('')
@@ -199,6 +200,7 @@ export default function App() {
         }}
         user={user}
         onLogout={handleLogout}
+        onOpenSettings={() => setShowSettings(true)}
       />
 
       <main className="main-content">
@@ -253,10 +255,6 @@ export default function App() {
               <ExpenseList expenses={filteredExpenses} onEdit={handleEdit} onDelete={deleteExpense} />
             )}
 
-            {activeTab === 'settings' && (
-              <AccountSettings user={user} onUserUpdate={setUser} />
-            )}
-
             {activeTab === 'dashboard' && (
               <div className="recent-section">
                 <h2 className="section-title">Recent Transactions</h2>
@@ -278,6 +276,20 @@ export default function App() {
           onSave={editingExpense ? updateExpense : addExpense}
           onClose={handleClose}
         />
+      )}
+
+      {showSettings && (
+        <div className="modal-overlay" onClick={(event) => event.target === event.currentTarget && setShowSettings(false)}>
+          <div className="modal settings-modal">
+            <div className="modal-header">
+              <h2>Account Settings</h2>
+              <button className="modal-close" onClick={() => setShowSettings(false)}>✕</button>
+            </div>
+            <div className="settings-modal-body">
+              <AccountSettings user={user} onUserUpdate={setUser} />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
