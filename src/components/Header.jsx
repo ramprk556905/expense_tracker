@@ -1,4 +1,12 @@
-export default function Header({ activeTab, setActiveTab, onAdd }) {
+import { supabase } from '../lib/supabase'
+
+export default function Header({ activeTab, setActiveTab, onAdd, user }) {
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+  }
+
+  const initials = user?.email?.slice(0, 2).toUpperCase() ?? '??'
+
   return (
     <header className="header">
       <div className="header-inner">
@@ -22,9 +30,18 @@ export default function Header({ activeTab, setActiveTab, onAdd }) {
           </button>
         </nav>
 
-        <button className="btn btn-primary" onClick={onAdd}>
-          + Add Transaction
-        </button>
+        <div className="header-right">
+          <button className="btn btn-primary" onClick={onAdd}>
+            + Add Transaction
+          </button>
+          <div className="user-menu">
+            <div className="user-avatar" title={user?.email}>{initials}</div>
+            <div className="user-dropdown">
+              <div className="user-email">{user?.email}</div>
+              <button className="logout-btn" onClick={handleLogout}>Sign Out</button>
+            </div>
+          </div>
+        </div>
       </div>
     </header>
   )

@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react'
-import { v4 as uuidv4 } from 'uuid'
+import { useState, useEffect, useCallback } from 'react'
+import { supabase } from './lib/supabase'
+import Auth from './components/Auth'
 import Header from './components/Header'
 import Summary from './components/Summary'
 import ExpenseForm from './components/ExpenseForm'
 import ExpenseList from './components/ExpenseList'
 import CategoryChart from './components/CategoryChart'
 import MonthlyChart from './components/MonthlyChart'
+import CSVImport from './components/CSVImport'
 import './App.css'
 
 export const formatINR = (n) =>
@@ -24,21 +26,11 @@ export const CATEGORIES = [
   { name: 'Other', color: '#6b7280', icon: '📦' },
 ]
 
-function loadFromStorage() {
-  try {
-    const data = localStorage.getItem('expense_tracker_data')
-    return data ? JSON.parse(data) : null
-  } catch {
-    return null
-  }
-}
-
-function saveToStorage(expenses) {
-  localStorage.setItem('expense_tracker_data', JSON.stringify(expenses))
-}
-
 export default function App() {
-  const [expenses, setExpenses] = useState(() => loadFromStorage() ?? [])
+  const [user, setUser] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [expenses, setExpenses] = useState([])
+  const [dataLoading, setDataLoading] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [editingExpense, setEditingExpense] = useState(null)
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -47,38 +39,81 @@ export default function App() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
 
+  // Auth state listener
   useEffect(() => {
-    saveToStorage(expenses)
-  }, [expenses])
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+      setAuthLoading(false)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
+    return () => subscription.unsubscribe()
+  }, [])
 
-  const addExpense = (data) => {
-    setExpenses(prev => [{ ...data, id: uuidv4() }, ...prev])
+  // Load expenses when user logs in
+  const loadExpenses = useCallback(async (uid) => {
+    setDataLoading(true)
+    const { data, error } = await supabase
+      .from('expenses')
+      .select('*')
+      .eq('user_id', uid)
+      .order('date', { ascending: false })
+    if (!error) setExpenses(data)
+    setDataLoading(false)
+  }, [])
+
+  useEffect(() => {
+    if (user) loadExpenses(user.id)
+    else setExpenses([])
+  }, [user, loadExpenses])
+
+  const addExpense = async (data) => {
+    const { data: row, error } = await supabase
+      .from('expenses')
+      .insert([{ ...data, user_id: user.id }])
+      .select()
+      .single()
+    if (!error) setExpenses(prev => [row, ...prev])
     setShowForm(false)
   }
 
-  const updateExpense = (data) => {
-    setExpenses(prev => prev.map(e => e.id === data.id ? data : e))
+  const updateExpense = async (data) => {
+    const { description, amount, category, date, type } = data
+    const { error } = await supabase
+      .from('expenses')
+      .update({ description, amount, category, date, type })
+      .eq('id', data.id)
+      .eq('user_id', user.id)
+    if (!error) setExpenses(prev => prev.map(e => e.id === data.id ? { ...e, ...data } : e))
     setEditingExpense(null)
     setShowForm(false)
   }
 
-  const deleteExpense = (id) => {
-    setExpenses(prev => prev.filter(e => e.id !== id))
+  const deleteExpense = async (id) => {
+    const { error } = await supabase
+      .from('expenses')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id)
+    if (!error) setExpenses(prev => prev.filter(e => e.id !== id))
   }
 
-  const handleEdit = (expense) => {
-    setEditingExpense(expense)
-    setShowForm(true)
+  const bulkAddExpenses = async (rows) => {
+    const { data, error } = await supabase
+      .from('expenses')
+      .insert(rows.map(r => ({ ...r, user_id: user.id })))
+      .select()
+    if (!error) setExpenses(prev => [...data, ...prev])
+    return { count: data?.length ?? 0, error }
   }
 
-  const handleFormClose = () => {
-    setShowForm(false)
-    setEditingExpense(null)
-  }
+  const handleEdit = (expense) => { setEditingExpense(expense); setShowForm(true) }
+  const handleFormClose = () => { setShowForm(false); setEditingExpense(null) }
 
+  // Budget logic: prev month salary → current month budget
   const filteredExpenses = expenses.filter(e => e.date.startsWith(filterMonth))
 
-  // Salary received at end of previous month funds this month's expenses
   const prevMonth = (() => {
     const [y, m] = filterMonth.split('-').map(Number)
     const d = new Date(y, m - 2, 1)
@@ -92,7 +127,6 @@ export default function App() {
   const budget = expenses
     .filter(e => e.date.startsWith(prevMonth) && e.type === 'income')
     .reduce((s, e) => s + e.amount, 0)
-
   const totalExpenses = filteredExpenses.filter(e => e.type === 'expense').reduce((s, e) => s + e.amount, 0)
   const remaining = budget - totalExpenses
 
@@ -109,14 +143,23 @@ export default function App() {
     const blob = new Blob([content], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    a.click()
+    a.href = url; a.download = filename; a.click()
     URL.revokeObjectURL(url)
   }
 
   const exportMonthCSV = () => downloadCSV(buildCSV(filteredExpenses), `expenses-${filterMonth}.csv`)
   const exportMasterCSV = () => downloadCSV(buildCSV(expenses), `expenses-master-all.csv`)
+
+  if (authLoading) {
+    return (
+      <div className="splash">
+        <span className="splash-icon">💰</span>
+        <p>Loading…</p>
+      </div>
+    )
+  }
+
+  if (!user) return <Auth />
 
   return (
     <div className="app">
@@ -124,6 +167,7 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onAdd={() => { setEditingExpense(null); setShowForm(true) }}
+        user={user}
       />
 
       <main className="main-content">
@@ -136,49 +180,52 @@ export default function App() {
               onChange={e => setFilterMonth(e.target.value)}
             />
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="btn btn-outline" onClick={exportMonthCSV}>
-              ↓ Month CSV
-            </button>
-            <button className="btn btn-outline" onClick={exportMasterCSV}>
-              ↓ Master CSV
-            </button>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <CSVImport onImport={bulkAddExpenses} />
+            <button className="btn btn-outline" onClick={exportMonthCSV}>↓ Month CSV</button>
+            <button className="btn btn-outline" onClick={exportMasterCSV}>↓ Master CSV</button>
           </div>
         </div>
 
-        <Summary
-          budget={budget}
-          totalExpenses={totalExpenses}
-          remaining={remaining}
-          count={filteredExpenses.length}
-          prevMonthLabel={prevMonthLabel}
-        />
-
-        {activeTab === 'dashboard' && (
-          <div className="dashboard-grid">
-            <CategoryChart expenses={filteredExpenses} />
-            <MonthlyChart expenses={expenses} />
-          </div>
-        )}
-
-        {activeTab === 'transactions' && (
-          <ExpenseList
-            expenses={filteredExpenses}
-            onEdit={handleEdit}
-            onDelete={deleteExpense}
-          />
-        )}
-
-        {activeTab === 'dashboard' && (
-          <div className="recent-section">
-            <h2 className="section-title">Recent Transactions</h2>
-            <ExpenseList
-              expenses={filteredExpenses.slice(0, 5)}
-              onEdit={handleEdit}
-              onDelete={deleteExpense}
-              compact
+        {dataLoading ? (
+          <div className="data-loading">Loading your transactions…</div>
+        ) : (
+          <>
+            <Summary
+              budget={budget}
+              totalExpenses={totalExpenses}
+              remaining={remaining}
+              count={filteredExpenses.length}
+              prevMonthLabel={prevMonthLabel}
             />
-          </div>
+
+            {activeTab === 'dashboard' && (
+              <div className="dashboard-grid">
+                <CategoryChart expenses={filteredExpenses} />
+                <MonthlyChart expenses={expenses} />
+              </div>
+            )}
+
+            {activeTab === 'transactions' && (
+              <ExpenseList
+                expenses={filteredExpenses}
+                onEdit={handleEdit}
+                onDelete={deleteExpense}
+              />
+            )}
+
+            {activeTab === 'dashboard' && (
+              <div className="recent-section">
+                <h2 className="section-title">Recent Transactions</h2>
+                <ExpenseList
+                  expenses={filteredExpenses.slice(0, 5)}
+                  onEdit={handleEdit}
+                  onDelete={deleteExpense}
+                  compact
+                />
+              </div>
+            )}
+          </>
         )}
       </main>
 

@@ -1,0 +1,111 @@
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 60%, #fdf4ff 100%);
+  padding: 20px;
+}
+
+.auth-card {
+  background: white;
+  border-radius: 20px;
+  padding: 40px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 20px 60px rgba(99,102,241,.12), 0 4px 16px rgba(0,0,0,.06);
+}
+
+.auth-logo { text-align: center; margin-bottom: 28px; }
+.auth-logo-icon { font-size: 44px; display: block; margin-bottom: 8px; }
+.auth-logo-text { font-size: 24px; font-weight: 700; color: #6366f1; margin: 0; }
+.auth-tagline { font-size: 14px; color: #64748b; margin-top: 4px; }
+
+.auth-tabs {
+  display: flex;
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 24px;
+}
+.auth-tab {
+  flex: 1;
+  padding: 9px;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: all .15s;
+}
+.auth-tab.active {
+  background: white;
+  color: #6366f1;
+  box-shadow: 0 1px 3px rgba(0,0,0,.1);
+  font-weight: 600;
+}
+
+.auth-form { display: flex; flex-direction: column; gap: 16px; }
+.auth-hint { font-size: 13px; color: #64748b; }
+
+.auth-field { display: flex; flex-direction: column; gap: 6px; }
+.auth-field label { font-size: 13px; font-weight: 500; color: #475569; }
+.auth-field input {
+  padding: 11px 14px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 15px;
+  color: #1e293b;
+  transition: border-color .15s, box-shadow .15s;
+}
+.auth-field input:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99,102,241,.12);
+}
+
+.auth-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  font-size: 13px;
+  padding: 10px 14px;
+  border-radius: 8px;
+}
+.auth-success {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #16a34a;
+  font-size: 13px;
+  padding: 10px 14px;
+  border-radius: 8px;
+}
+
+.auth-btn {
+  padding: 12px;
+  background: #6366f1;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+  margin-top: 4px;
+}
+.auth-btn:hover:not(:disabled) { background: #4f46e5; }
+.auth-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+.auth-link {
+  background: none;
+  border: none;
+  color: #6366f1;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: center;
+  padding: 0;
+  text-decoration: underline;
+}
+.auth-link:hover { color: #4f46e5; }
