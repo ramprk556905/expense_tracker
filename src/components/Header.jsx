@@ -1,10 +1,4 @@
-import { supabase } from '../lib/supabase'
-
-export default function Header({ activeTab, setActiveTab, onAdd, user }) {
-  const handleLogout = async () => {
-    if (supabase) await supabase.auth.signOut()
-  }
-
+export default function Header({ activeTab, setActiveTab, onAdd, user, onLogout }) {
   const initials = user?.email?.slice(0, 2).toUpperCase() ?? '??'
 
   return (
@@ -16,29 +10,21 @@ export default function Header({ activeTab, setActiveTab, onAdd, user }) {
         </div>
 
         <nav className="nav">
-          <button
-            className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setActiveTab('dashboard')}
-          >
+          <button className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
             Dashboard
           </button>
-          <button
-            className={`nav-btn ${activeTab === 'transactions' ? 'active' : ''}`}
-            onClick={() => setActiveTab('transactions')}
-          >
+          <button className={`nav-btn ${activeTab === 'transactions' ? 'active' : ''}`} onClick={() => setActiveTab('transactions')}>
             Transactions
           </button>
         </nav>
 
         <div className="header-right">
-          <button className="btn btn-primary" onClick={onAdd}>
-            + Add Transaction
-          </button>
+          <button className="btn btn-primary" onClick={onAdd}>+ Add Transaction</button>
           <div className="user-menu">
             <div className="user-avatar" title={user?.email}>{initials}</div>
             <div className="user-dropdown">
               <div className="user-email">{user?.email}</div>
-              <button className="logout-btn" onClick={handleLogout}>Sign Out</button>
+              <button className="logout-btn" onClick={onLogout}>Sign Out</button>
             </div>
           </div>
         </div>

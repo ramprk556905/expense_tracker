@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase, supabaseConfigured } from './lib/supabase'
+import { api } from './lib/api'
 import Auth from './components/Auth'
 import Header from './components/Header'
 import Summary from './components/Summary'
@@ -14,106 +14,92 @@ export const formatINR = (n) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n)
 
 export const CATEGORIES = [
-  { name: 'Food & Dining', color: '#f97316', icon: '🍔' },
-  { name: 'Transport', color: '#3b82f6', icon: '🚗' },
-  { name: 'Housing', color: '#8b5cf6', icon: '🏠' },
+  { name: 'Food & Dining',   color: '#f97316', icon: '🍔' },
+  { name: 'Transport',       color: '#3b82f6', icon: '🚗' },
+  { name: 'Housing',         color: '#8b5cf6', icon: '🏠' },
   { name: 'Bills & Utilities', color: '#ef4444', icon: '⚡' },
-  { name: 'Entertainment', color: '#ec4899', icon: '🎬' },
-  { name: 'Healthcare', color: '#14b8a6', icon: '🏥' },
-  { name: 'Education', color: '#06b6d4', icon: '📚' },
-  { name: 'Shopping', color: '#f59e0b', icon: '🛍️' },
-  { name: 'Salary', color: '#22c55e', icon: '💼' },
-  { name: 'Other', color: '#6b7280', icon: '📦' },
+  { name: 'Entertainment',   color: '#ec4899', icon: '🎬' },
+  { name: 'Healthcare',      color: '#14b8a6', icon: '🏥' },
+  { name: 'Education',       color: '#06b6d4', icon: '📚' },
+  { name: 'Shopping',        color: '#f59e0b', icon: '🛍️' },
+  { name: 'Salary',          color: '#22c55e', icon: '💼' },
+  { name: 'Other',           color: '#6b7280', icon: '📦' },
 ]
 
 export default function App() {
-  const [user, setUser] = useState(null)
-  const [authLoading, setAuthLoading] = useState(true)
-  const [expenses, setExpenses] = useState([])
+  const [user, setUser]               = useState(api.getUser)
+  const [expenses, setExpenses]       = useState([])
   const [dataLoading, setDataLoading] = useState(false)
-  const [showForm, setShowForm] = useState(false)
+  const [showForm, setShowForm]       = useState(false)
   const [editingExpense, setEditingExpense] = useState(null)
-  const [activeTab, setActiveTab] = useState('dashboard')
+  const [activeTab, setActiveTab]     = useState('dashboard')
   const [filterMonth, setFilterMonth] = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
 
-  // Auth state listener
-  useEffect(() => {
-    if (!supabase) { setAuthLoading(false); return }
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      setAuthLoading(false)
-    })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-    })
-    return () => subscription.unsubscribe()
-  }, [])
-
-  // Load expenses when user logs in
-  const loadExpenses = useCallback(async (uid) => {
-    if (!supabase) return
+  const loadExpenses = useCallback(async () => {
     setDataLoading(true)
-    const { data, error } = await supabase
-      .from('expenses')
-      .select('*')
-      .eq('user_id', uid)
-      .order('date', { ascending: false })
-    if (!error) setExpenses(data)
+    try {
+      const data = await api.getExpenses()
+      setExpenses(data ?? [])
+    } catch {
+      setExpenses([])
+    }
     setDataLoading(false)
   }, [])
 
   useEffect(() => {
-    if (user) loadExpenses(user.id)
+    if (user) loadExpenses()
     else setExpenses([])
   }, [user, loadExpenses])
 
+  const handleLoginSuccess = (userData) => setUser(userData)
+
+  const handleLogout = () => {
+    api.logout()
+    setUser(null)
+    setExpenses([])
+  }
+
   const addExpense = async (data) => {
-    const { data: row, error } = await supabase
-      .from('expenses')
-      .insert([{ ...data, user_id: user.id }])
-      .select()
-      .single()
-    if (!error) setExpenses(prev => [row, ...prev])
+    try {
+      const row = await api.addExpense(data)
+      setExpenses(prev => [row, ...prev])
+    } catch (e) { alert(e.message) }
     setShowForm(false)
   }
 
   const updateExpense = async (data) => {
-    const { description, amount, category, date, type } = data
-    const { error } = await supabase
-      .from('expenses')
-      .update({ description, amount, category, date, type })
-      .eq('id', data.id)
-      .eq('user_id', user.id)
-    if (!error) setExpenses(prev => prev.map(e => e.id === data.id ? { ...e, ...data } : e))
+    try {
+      const row = await api.updateExpense(data.id, data)
+      setExpenses(prev => prev.map(e => e.id === data.id ? row : e))
+    } catch (e) { alert(e.message) }
     setEditingExpense(null)
     setShowForm(false)
   }
 
   const deleteExpense = async (id) => {
-    const { error } = await supabase
-      .from('expenses')
-      .delete()
-      .eq('id', id)
-      .eq('user_id', user.id)
-    if (!error) setExpenses(prev => prev.filter(e => e.id !== id))
+    try {
+      await api.deleteExpense(id)
+      setExpenses(prev => prev.filter(e => e.id !== id))
+    } catch (e) { alert(e.message) }
   }
 
   const bulkAddExpenses = async (rows) => {
-    const { data, error } = await supabase
-      .from('expenses')
-      .insert(rows.map(r => ({ ...r, user_id: user.id })))
-      .select()
-    if (!error) setExpenses(prev => [...data, ...prev])
-    return { count: data?.length ?? 0, error }
+    try {
+      const data = await api.bulkAdd(rows)
+      setExpenses(prev => [...data, ...prev])
+      return { count: data.length, error: null }
+    } catch (e) {
+      return { count: 0, error: e }
+    }
   }
 
-  const handleEdit = (expense) => { setEditingExpense(expense); setShowForm(true) }
-  const handleFormClose = () => { setShowForm(false); setEditingExpense(null) }
+  const handleEdit  = (expense) => { setEditingExpense(expense); setShowForm(true) }
+  const handleClose = () => { setShowForm(false); setEditingExpense(null) }
 
-  // Budget logic: prev month salary → current month budget
+  // Budget: prev month salary funds this month's expenses
   const filteredExpenses = expenses.filter(e => e.date.startsWith(filterMonth))
 
   const prevMonth = (() => {
@@ -126,54 +112,26 @@ export default function App() {
     return new Date(y, m - 1, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
   })()
 
-  const budget = expenses
-    .filter(e => e.date.startsWith(prevMonth) && e.type === 'income')
-    .reduce((s, e) => s + e.amount, 0)
+  const budget       = expenses.filter(e => e.date.startsWith(prevMonth) && e.type === 'income').reduce((s, e) => s + e.amount, 0)
   const totalExpenses = filteredExpenses.filter(e => e.type === 'expense').reduce((s, e) => s + e.amount, 0)
-  const remaining = budget - totalExpenses
+  const remaining    = budget - totalExpenses
 
   const buildCSV = (rows) => {
     const headers = ['Date', 'Description', 'Category', 'Type', 'Amount (INR)']
-    const lines = rows
-      .slice()
-      .sort((a, b) => new Date(a.date) - new Date(b.date))
+    const lines = rows.slice().sort((a, b) => new Date(a.date) - new Date(b.date))
       .map(e => [e.date, `"${e.description}"`, e.category, e.type, e.amount.toFixed(2)])
     return [headers, ...lines].map(r => r.join(',')).join('\n')
   }
 
   const downloadCSV = (content, filename) => {
     const blob = new Blob([content], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
     a.href = url; a.download = filename; a.click()
     URL.revokeObjectURL(url)
   }
 
-  const exportMonthCSV = () => downloadCSV(buildCSV(filteredExpenses), `expenses-${filterMonth}.csv`)
-  const exportMasterCSV = () => downloadCSV(buildCSV(expenses), `expenses-master-all.csv`)
-
-  if (!supabaseConfigured) {
-    return (
-      <div className="splash">
-        <span className="splash-icon">⚙️</span>
-        <p style={{ color: '#ef4444', fontWeight: 600 }}>Supabase not configured</p>
-        <p style={{ fontSize: 13, maxWidth: 360, textAlign: 'center', color: '#64748b' }}>
-          Set <strong>VITE_SUPABASE_URL</strong> and <strong>VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY</strong> in your environment variables and redeploy.
-        </p>
-      </div>
-    )
-  }
-
-  if (authLoading) {
-    return (
-      <div className="splash">
-        <span className="splash-icon">💰</span>
-        <p>Loading…</p>
-      </div>
-    )
-  }
-
-  if (!user) return <Auth />
+  if (!user) return <Auth onSuccess={handleLoginSuccess} />
 
   return (
     <div className="app">
@@ -182,22 +140,19 @@ export default function App() {
         setActiveTab={setActiveTab}
         onAdd={() => { setEditingExpense(null); setShowForm(true) }}
         user={user}
+        onLogout={handleLogout}
       />
 
       <main className="main-content">
         <div className="toolbar">
           <div className="month-picker">
             <label>Month</label>
-            <input
-              type="month"
-              value={filterMonth}
-              onChange={e => setFilterMonth(e.target.value)}
-            />
+            <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} />
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <CSVImport onImport={bulkAddExpenses} />
-            <button className="btn btn-outline" onClick={exportMonthCSV}>↓ Month CSV</button>
-            <button className="btn btn-outline" onClick={exportMasterCSV}>↓ Master CSV</button>
+            <button className="btn btn-outline" onClick={() => downloadCSV(buildCSV(filteredExpenses), `expenses-${filterMonth}.csv`)}>↓ Month CSV</button>
+            <button className="btn btn-outline" onClick={() => downloadCSV(buildCSV(expenses), `expenses-master-all.csv`)}>↓ Master CSV</button>
           </div>
         </div>
 
@@ -221,22 +176,13 @@ export default function App() {
             )}
 
             {activeTab === 'transactions' && (
-              <ExpenseList
-                expenses={filteredExpenses}
-                onEdit={handleEdit}
-                onDelete={deleteExpense}
-              />
+              <ExpenseList expenses={filteredExpenses} onEdit={handleEdit} onDelete={deleteExpense} />
             )}
 
             {activeTab === 'dashboard' && (
               <div className="recent-section">
                 <h2 className="section-title">Recent Transactions</h2>
-                <ExpenseList
-                  expenses={filteredExpenses.slice(0, 5)}
-                  onEdit={handleEdit}
-                  onDelete={deleteExpense}
-                  compact
-                />
+                <ExpenseList expenses={filteredExpenses.slice(0, 5)} onEdit={handleEdit} onDelete={deleteExpense} compact />
               </div>
             )}
           </>
@@ -247,7 +193,7 @@ export default function App() {
         <ExpenseForm
           expense={editingExpense}
           onSave={editingExpense ? updateExpense : addExpense}
-          onClose={handleFormClose}
+          onClose={handleClose}
         />
       )}
     </div>
