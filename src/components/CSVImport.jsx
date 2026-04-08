@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { CATEGORIES } from '../App'
+import { CATEGORIES } from '../lib/expense-config'
 
 const VALID_CATEGORIES = CATEGORIES.map(c => c.name)
 const VALID_TYPES = ['expense', 'income']

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { CATEGORIES } from '../App'
+import { CATEGORIES } from '../lib/expense-config'
 
 export default function ExpenseForm({ expense, onSave, onClose }) {
   const today = new Date().toISOString().split('T')[0]

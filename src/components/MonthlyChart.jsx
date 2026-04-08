@@ -1,5 +1,5 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { formatINR } from '../App'
+import { formatINR } from '../lib/expense-config'
 
 const fmt = (n) => `₹${n.toLocaleString('en-IN')}`
 

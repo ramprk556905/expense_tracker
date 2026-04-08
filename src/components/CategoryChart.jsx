@@ -1,5 +1,5 @@
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { CATEGORIES, formatINR as fmt } from '../App'
+import { CATEGORIES, formatINR as fmt } from '../lib/expense-config'
 
 export default function CategoryChart({ expenses }) {
   const expensesOnly = expenses.filter(e => e.type === 'expense')

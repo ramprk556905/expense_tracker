@@ -1,4 +1,4 @@
-import { formatINR as fmt } from '../App'
+import { formatINR as fmt } from '../lib/expense-config'
 
 export default function Summary({ budget, totalExpenses, remaining, count, prevMonthLabel }) {
   const spentPct = budget > 0 ? Math.min((totalExpenses / budget) * 100, 100) : 0
