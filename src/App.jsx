@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from './lib/supabase'
+import { supabase, supabaseConfigured } from './lib/supabase'
 import Auth from './components/Auth'
 import Header from './components/Header'
 import Summary from './components/Summary'
@@ -149,6 +149,18 @@ export default function App() {
 
   const exportMonthCSV = () => downloadCSV(buildCSV(filteredExpenses), `expenses-${filterMonth}.csv`)
   const exportMasterCSV = () => downloadCSV(buildCSV(expenses), `expenses-master-all.csv`)
+
+  if (!supabaseConfigured) {
+    return (
+      <div className="splash">
+        <span className="splash-icon">⚙️</span>
+        <p style={{ color: '#ef4444', fontWeight: 600 }}>Supabase not configured</p>
+        <p style={{ fontSize: 13, maxWidth: 360, textAlign: 'center', color: '#64748b' }}>
+          Set <strong>VITE_SUPABASE_URL</strong> and <strong>VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY</strong> in your environment variables and redeploy.
+        </p>
+      </div>
+    )
+  }
 
   if (authLoading) {
     return (
