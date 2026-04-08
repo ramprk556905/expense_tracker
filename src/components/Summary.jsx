@@ -1,14 +1,14 @@
 import { formatINR as fmt } from '../lib/expense-config'
 
-export default function Summary({ budget, totalExpenses, remaining, count, prevMonthLabel }) {
+export default function Summary({ budget, prevMonthSalary, currentMonthIncome, totalExpenses, remaining, count, prevMonthLabel }) {
   const spentPct = budget > 0 ? Math.min((totalExpenses / budget) * 100, 100) : 0
   const overBudget = budget > 0 && remaining < 0
 
   return (
     <div className="summary-wrapper">
       <div className="budget-source-note">
-        💼 Budget source: <strong>{prevMonthLabel}</strong> salary
-        {budget === 0 && <span className="budget-warn"> — no salary recorded for that month yet</span>}
+        💼 Budget source: <strong>{prevMonthLabel}</strong> salary + current month income (including delayed salary credits)
+        {budget === 0 && <span className="budget-warn"> — no income recorded yet</span>}
       </div>
 
       <div className="summary-grid">
@@ -19,9 +19,11 @@ export default function Summary({ budget, totalExpenses, remaining, count, prevM
         </div>
 
         <div className="summary-card card-income">
-          <div className="summary-label">Salary (Last Month)</div>
+          <div className="summary-label">Income Considered</div>
           <div className="summary-amount income">{budget > 0 ? fmt(budget) : '—'}</div>
-          <div className="summary-sub">↑ Available to spend</div>
+          <div className="summary-sub">
+            {`Prev salary: ${fmt(prevMonthSalary || 0)} | This month income: ${fmt(currentMonthIncome || 0)}`}
+          </div>
         </div>
 
         <div className="summary-card card-expense">

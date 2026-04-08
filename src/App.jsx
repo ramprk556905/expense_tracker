@@ -157,10 +157,14 @@ export default function App() {
   const budget = safeExpenses
     .filter((expense) => expense.date.startsWith(prevMonth) && expense.type === 'income')
     .reduce((sum, expense) => sum + expense.amount, 0)
+  const currentMonthIncome = filteredExpenses
+    .filter((expense) => expense.type === 'income')
+    .reduce((sum, expense) => sum + expense.amount, 0)
+  const availableBudget = budget + currentMonthIncome
   const totalExpenses = filteredExpenses
     .filter((expense) => expense.type === 'expense')
     .reduce((sum, expense) => sum + expense.amount, 0)
-  const remaining = budget - totalExpenses
+  const remaining = availableBudget - totalExpenses
 
   const buildCSV = (rows) => {
     const headers = ['Date', 'Description', 'Category', 'Type', 'Amount (INR)']
@@ -233,7 +237,9 @@ export default function App() {
             {notification && <div className="inline-toast">{notification}</div>}
 
             <Summary
-              budget={budget}
+              budget={availableBudget}
+              prevMonthSalary={budget}
+              currentMonthIncome={currentMonthIncome}
               totalExpenses={totalExpenses}
               remaining={remaining}
               count={filteredExpenses.length}
