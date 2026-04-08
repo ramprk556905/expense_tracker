@@ -1,6 +1,4 @@
-function fmt(n) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
-}
+import { formatINR as fmt } from '../App'
 
 export default function Summary({ balance, totalIncome, totalExpenses, count }) {
   return (

@@ -1,7 +1,5 @@
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { CATEGORIES } from '../App'
-
-const fmt = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+import { CATEGORIES, formatINR as fmt } from '../App'
 
 export default function CategoryChart({ expenses }) {
   const expensesOnly = expenses.filter(e => e.type === 'expense')

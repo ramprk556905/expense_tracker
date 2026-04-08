@@ -8,6 +8,9 @@ import CategoryChart from './components/CategoryChart'
 import MonthlyChart from './components/MonthlyChart'
 import './App.css'
 
+export const formatINR = (n) =>
+  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n)
+
 export const CATEGORIES = [
   { name: 'Food & Dining', color: '#f97316', icon: '🍔' },
   { name: 'Transport', color: '#3b82f6', icon: '🚗' },
@@ -19,17 +22,6 @@ export const CATEGORIES = [
   { name: 'Shopping', color: '#f59e0b', icon: '🛍️' },
   { name: 'Salary', color: '#22c55e', icon: '💼' },
   { name: 'Other', color: '#6b7280', icon: '📦' },
-]
-
-const SAMPLE_DATA = [
-  { id: uuidv4(), description: 'Grocery shopping', amount: 85.50, category: 'Food & Dining', date: '2026-04-01', type: 'expense' },
-  { id: uuidv4(), description: 'Monthly salary', amount: 4500.00, category: 'Salary', date: '2026-04-01', type: 'income' },
-  { id: uuidv4(), description: 'Electric bill', amount: 95.00, category: 'Bills & Utilities', date: '2026-04-02', type: 'expense' },
-  { id: uuidv4(), description: 'Uber ride', amount: 18.50, category: 'Transport', date: '2026-04-03', type: 'expense' },
-  { id: uuidv4(), description: 'Netflix subscription', amount: 15.99, category: 'Entertainment', date: '2026-04-04', type: 'expense' },
-  { id: uuidv4(), description: 'Lunch at office', amount: 12.00, category: 'Food & Dining', date: '2026-04-05', type: 'expense' },
-  { id: uuidv4(), description: 'Doctor visit', amount: 50.00, category: 'Healthcare', date: '2026-04-06', type: 'expense' },
-  { id: uuidv4(), description: 'Online course', amount: 29.99, category: 'Education', date: '2026-04-07', type: 'expense' },
 ]
 
 function loadFromStorage() {
@@ -46,7 +38,7 @@ function saveToStorage(expenses) {
 }
 
 export default function App() {
-  const [expenses, setExpenses] = useState(() => loadFromStorage() ?? SAMPLE_DATA)
+  const [expenses, setExpenses] = useState(() => loadFromStorage() ?? [])
   const [showForm, setShowForm] = useState(false)
   const [editingExpense, setEditingExpense] = useState(null)
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -90,20 +82,27 @@ export default function App() {
   const totalExpenses = filteredExpenses.filter(e => e.type === 'expense').reduce((s, e) => s + e.amount, 0)
   const balance = totalIncome - totalExpenses
 
-  const exportCSV = () => {
-    const headers = ['Date', 'Description', 'Category', 'Type', 'Amount']
-    const rows = filteredExpenses.map(e => [
-      e.date, `"${e.description}"`, e.category, e.type, e.amount.toFixed(2)
-    ])
-    const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
+  const buildCSV = (rows) => {
+    const headers = ['Date', 'Description', 'Category', 'Type', 'Amount (INR)']
+    const lines = rows
+      .slice()
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .map(e => [e.date, `"${e.description}"`, e.category, e.type, e.amount.toFixed(2)])
+    return [headers, ...lines].map(r => r.join(',')).join('\n')
+  }
+
+  const downloadCSV = (content, filename) => {
+    const blob = new Blob([content], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `expenses-${filterMonth}.csv`
+    a.download = filename
     a.click()
     URL.revokeObjectURL(url)
   }
+
+  const exportMonthCSV = () => downloadCSV(buildCSV(filteredExpenses), `expenses-${filterMonth}.csv`)
+  const exportMasterCSV = () => downloadCSV(buildCSV(expenses), `expenses-master-all.csv`)
 
   return (
     <div className="app">
@@ -123,9 +122,14 @@ export default function App() {
               onChange={e => setFilterMonth(e.target.value)}
             />
           </div>
-          <button className="btn btn-outline" onClick={exportCSV}>
-            ↓ Export CSV
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="btn btn-outline" onClick={exportMonthCSV}>
+              ↓ Month CSV
+            </button>
+            <button className="btn btn-outline" onClick={exportMasterCSV}>
+              ↓ Master CSV
+            </button>
+          </div>
         </div>
 
         <Summary

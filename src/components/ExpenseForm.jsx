@@ -86,7 +86,7 @@ export default function ExpenseForm({ expense, onSave, onClose }) {
 
           <div className="form-row">
             <div className="form-group">
-              <label>Amount ($)</label>
+              <label>Amount (₹)</label>
               <input
                 type="number"
                 placeholder="0.00"

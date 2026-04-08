@@ -1,6 +1,7 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { formatINR } from '../App'
 
-const fmt = (n) => `$${n.toLocaleString()}`
+const fmt = (n) => `₹${n.toLocaleString('en-IN')}`
 
 export default function MonthlyChart({ expenses }) {
   const months = []
@@ -25,7 +26,7 @@ export default function MonthlyChart({ expenses }) {
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
           <XAxis dataKey="month" tick={{ fontSize: 12 }} />
           <YAxis tickFormatter={fmt} tick={{ fontSize: 11 }} width={60} />
-          <Tooltip formatter={(v) => [`$${v.toFixed(2)}`, '']} />
+          <Tooltip formatter={(v) => [formatINR(v), '']} />
           <Legend />
           <Bar dataKey="Income" fill="#22c55e" radius={[4, 4, 0, 0]} />
           <Bar dataKey="Expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
