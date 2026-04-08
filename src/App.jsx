@@ -41,6 +41,7 @@ export default function App() {
 
   // Auth state listener
   useEffect(() => {
+    if (!supabase) { setAuthLoading(false); return }
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
       setAuthLoading(false)
@@ -53,6 +54,7 @@ export default function App() {
 
   // Load expenses when user logs in
   const loadExpenses = useCallback(async (uid) => {
+    if (!supabase) return
     setDataLoading(true)
     const { data, error } = await supabase
       .from('expenses')

@@ -14,6 +14,7 @@ export default function Auth() {
 
   const handleLogin = async (e) => {
     e.preventDefault()
+    if (!supabase) { setError('Supabase is not configured.'); return }
     setLoading(true); reset()
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) setError(error.message)
@@ -22,6 +23,7 @@ export default function Auth() {
 
   const handleSignup = async (e) => {
     e.preventDefault()
+    if (!supabase) { setError('Supabase is not configured.'); return }
     if (password.length < 6) { setError('Password must be at least 6 characters.'); return }
     setLoading(true); reset()
     const { error } = await supabase.auth.signUp({ email, password })
@@ -32,6 +34,7 @@ export default function Auth() {
 
   const handleForgot = async (e) => {
     e.preventDefault()
+    if (!supabase) { setError('Supabase is not configured.'); return }
     setLoading(true); reset()
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: window.location.origin,

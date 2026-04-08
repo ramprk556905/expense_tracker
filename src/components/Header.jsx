@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase'
 
 export default function Header({ activeTab, setActiveTab, onAdd, user }) {
   const handleLogout = async () => {
-    await supabase.auth.signOut()
+    if (supabase) await supabase.auth.signOut()
   }
 
   const initials = user?.email?.slice(0, 2).toUpperCase() ?? '??'
