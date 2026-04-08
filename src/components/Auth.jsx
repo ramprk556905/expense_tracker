@@ -2,6 +2,28 @@ import { useState } from 'react'
 import { api } from '../lib/api'
 import './Auth.css'
 
+function EyeIcon({ hidden }) {
+  if (hidden) {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path
+          d="M3.3 2.3a1 1 0 0 0-1.4 1.4l2.1 2.1A12.5 12.5 0 0 0 1 12s3.5 7 11 7a11 11 0 0 0 5.1-1.2l2.6 2.6a1 1 0 1 0 1.4-1.4L3.3 2.3ZM8.2 10.9l4.9 4.9a3.5 3.5 0 0 1-4.9-4.9Zm7.4 2.9-1.8-1.8a3.5 3.5 0 0 0-3.8-3.8L8.2 6.4A9.7 9.7 0 0 1 12 5c7.5 0 11 7 11 7a12.8 12.8 0 0 1-2.6 3.6l-1.5-1.5a10.5 10.5 0 0 0 1.6-2.1A10.3 10.3 0 0 0 12 7a7.8 7.8 0 0 0-2.2.3l1.8 1.8a3.5 3.5 0 0 1 4 4.7Z"
+          fill="currentColor"
+        />
+      </svg>
+    )
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M12 5C4.5 5 1 12 1 12s3.5 7 11 7 11-7 11-7-3.5-7-11-7Zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"
+        fill="currentColor"
+      />
+    </svg>
+  )
+}
+
 export default function Auth({ onSuccess }) {
   const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
@@ -14,6 +36,9 @@ export default function Auth({ onSuccess }) {
   const [resetExpiresAt, setResetExpiresAt] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const resetMessages = () => {
     setError('')
@@ -32,6 +57,9 @@ export default function Auth({ onSuccess }) {
     setMode(nextMode)
     resetMessages()
     resetPasswordFields()
+    setShowPassword(false)
+    setShowNewPassword(false)
+    setShowConfirmPassword(false)
   }
 
   const formatError = (err) => {
@@ -60,7 +88,12 @@ export default function Auth({ onSuccess }) {
       const data = mode === 'login'
         ? await api.login(email, password, rememberMe)
         : await api.register(email, password, rememberMe)
-      onSuccess({ email: data.email, rememberMe: data.remember_me })
+      onSuccess({
+        email: data.email,
+        rememberMe: data.remember_me,
+        emailVerified: data.email_verified,
+        notifyNewTransaction: data.notify_new_transaction,
+      })
     } catch (err) {
       setError(formatError(err))
     } finally {
@@ -173,13 +206,23 @@ export default function Auth({ onSuccess }) {
 
             <div className="auth-field">
               <label>Password</label>
-              <input
-                type="password"
-                placeholder={mode === 'signup' ? 'Min 6 characters' : 'Enter your password'}
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-              />
+              <div className="auth-password-input">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder={mode === 'signup' ? 'Min 6 characters' : 'Enter your password'}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  className="auth-password-toggle"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  <EyeIcon hidden={showPassword} />
+                </button>
+              </div>
             </div>
 
             <label className="auth-checkbox-row">
@@ -251,22 +294,42 @@ export default function Auth({ onSuccess }) {
 
                 <div className="auth-field">
                   <label>New Password</label>
-                  <input
-                    type="password"
-                    placeholder="Min 6 characters"
-                    value={newPassword}
-                    onChange={(event) => setNewPassword(event.target.value)}
-                  />
+                  <div className="auth-password-input">
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      placeholder="Min 6 characters"
+                      value={newPassword}
+                      onChange={(event) => setNewPassword(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="auth-password-toggle"
+                      onClick={() => setShowNewPassword((prev) => !prev)}
+                      aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
+                    >
+                      <EyeIcon hidden={showNewPassword} />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="auth-field">
                   <label>Confirm Password</label>
-                  <input
-                    type="password"
-                    placeholder="Repeat new password"
-                    value={confirmPassword}
-                    onChange={(event) => setConfirmPassword(event.target.value)}
-                  />
+                  <div className="auth-password-input">
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      placeholder="Repeat new password"
+                      value={confirmPassword}
+                      onChange={(event) => setConfirmPassword(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="auth-password-toggle"
+                      onClick={() => setShowConfirmPassword((prev) => !prev)}
+                      aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                    >
+                      <EyeIcon hidden={showConfirmPassword} />
+                    </button>
+                  </div>
                 </div>
 
                 <button type="submit" className="auth-secondary-btn" disabled={loading}>

@@ -10,7 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import Boolean, Column, DateTime, Float, String, create_engine
+from sqlalchemy import Boolean, Column, DateTime, Float, String, create_engine, inspect, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 
@@ -48,6 +48,10 @@ class UserModel(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     email = Column(String, unique=True, index=True, nullable=False)
     password = Column(String, nullable=False)
+    email_verified = Column(Boolean, default=False, nullable=False)
+    email_verification_code = Column(String, nullable=True)
+    email_verification_expires_at = Column(DateTime, nullable=True)
+    notify_new_transaction = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -92,6 +96,33 @@ class PasswordResetTokenModel(Base):
 
 
 Base.metadata.create_all(bind=engine)
+
+
+def ensure_schema_columns():
+    inspector = inspect(engine)
+    tables = inspector.get_table_names()
+    if "users" not in tables:
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("users")}
+    statements = []
+
+    if "email_verified" not in columns:
+        statements.append("ALTER TABLE users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT 0")
+    if "email_verification_code" not in columns:
+        statements.append("ALTER TABLE users ADD COLUMN email_verification_code VARCHAR")
+    if "email_verification_expires_at" not in columns:
+        statements.append("ALTER TABLE users ADD COLUMN email_verification_expires_at DATETIME")
+    if "notify_new_transaction" not in columns:
+        statements.append("ALTER TABLE users ADD COLUMN notify_new_transaction BOOLEAN NOT NULL DEFAULT 1")
+
+    if statements:
+        with engine.begin() as conn:
+            for statement in statements:
+                conn.execute(text(statement))
+
+
+ensure_schema_columns()
 
 
 pwd = CryptContext(schemes=["pbkdf2_sha256", "bcrypt"], deprecated="auto")
@@ -227,6 +258,8 @@ class TokenOut(BaseModel):
     access_token: str
     email: str
     remember_me: bool
+    email_verified: bool
+    notify_new_transaction: bool
     expires_at: datetime
 
 
@@ -234,6 +267,31 @@ class ForgotPasswordOut(BaseModel):
     message: str
     reset_code: str | None = None
     expires_at: datetime | None = None
+
+
+class ProfileOut(BaseModel):
+    email: str
+    email_verified: bool
+    notify_new_transaction: bool
+
+
+class ChangePasswordBody(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class RequestVerificationOut(BaseModel):
+    message: str
+    verification_code: str | None = None
+    expires_at: datetime | None = None
+
+
+class VerifyEmailBody(BaseModel):
+    code: str
+
+
+class NotificationPrefsBody(BaseModel):
+    notify_new_transaction: bool
 
 
 class LogoutOut(BaseModel):
@@ -300,6 +358,8 @@ def register(body: AuthBody, request: Request, db: Session = Depends(get_db)):
         "access_token": token,
         "email": body.email,
         "remember_me": body.remember_me,
+        "email_verified": user.email_verified,
+        "notify_new_transaction": user.notify_new_transaction,
         "expires_at": session.expires_at,
     }
 
@@ -315,7 +375,18 @@ def login(body: AuthBody, request: Request, db: Session = Depends(get_db)):
         "access_token": token,
         "email": body.email,
         "remember_me": body.remember_me,
+        "email_verified": user.email_verified,
+        "notify_new_transaction": user.notify_new_transaction,
         "expires_at": session.expires_at,
+    }
+
+
+@app.get("/auth/profile", response_model=ProfileOut)
+def profile(user: UserModel = Depends(current_user)):
+    return {
+        "email": user.email,
+        "email_verified": user.email_verified,
+        "notify_new_transaction": user.notify_new_transaction,
     }
 
 
@@ -324,6 +395,70 @@ def logout(session: AuthSessionModel = Depends(current_session), db: Session = D
     session.logged_out_at = datetime.utcnow()
     db.commit()
     return {"ok": True}
+
+
+@app.post("/auth/change-password", response_model=LogoutOut)
+def change_password(body: ChangePasswordBody, user: UserModel = Depends(current_user), db: Session = Depends(get_db)):
+    if not pwd.verify(body.current_password, user.password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if not password_valid(body.new_password):
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
+
+    user.password = pwd.hash(body.new_password)
+    db.commit()
+    return {"ok": True}
+
+
+@app.post("/auth/request-email-verification", response_model=RequestVerificationOut)
+def request_email_verification(user: UserModel = Depends(current_user), db: Session = Depends(get_db)):
+    if user.email_verified:
+        return {"message": "Your email is already verified."}
+
+    code = secrets.token_hex(3).upper()
+    expires_at = datetime.utcnow() + timedelta(minutes=RESET_CODE_TTL_MINUTES)
+    user.email_verification_code = code
+    user.email_verification_expires_at = expires_at
+    db.commit()
+    return {
+        "message": "Verification code created. Use it below to verify your email.",
+        "verification_code": code,
+        "expires_at": expires_at,
+    }
+
+
+@app.post("/auth/verify-email", response_model=ProfileOut)
+def verify_email(body: VerifyEmailBody, user: UserModel = Depends(current_user), db: Session = Depends(get_db)):
+    code = body.code.strip().upper()
+    if (
+        not user.email_verification_code
+        or not user.email_verification_expires_at
+        or user.email_verification_code != code
+        or user.email_verification_expires_at <= datetime.utcnow()
+    ):
+        raise HTTPException(status_code=400, detail="Verification code is invalid or expired")
+
+    user.email_verified = True
+    user.email_verification_code = None
+    user.email_verification_expires_at = None
+    db.commit()
+    db.refresh(user)
+    return {
+        "email": user.email,
+        "email_verified": user.email_verified,
+        "notify_new_transaction": user.notify_new_transaction,
+    }
+
+
+@app.patch("/auth/preferences", response_model=ProfileOut)
+def update_preferences(body: NotificationPrefsBody, user: UserModel = Depends(current_user), db: Session = Depends(get_db)):
+    user.notify_new_transaction = body.notify_new_transaction
+    db.commit()
+    db.refresh(user)
+    return {
+        "email": user.email,
+        "email_verified": user.email_verified,
+        "notify_new_transaction": user.notify_new_transaction,
+    }
 
 
 @app.post("/auth/forgot-password", response_model=ForgotPasswordOut)

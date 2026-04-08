@@ -10,6 +10,7 @@ import CategoryChart from './components/CategoryChart'
 import MonthlyChart from './components/MonthlyChart'
 import CSVImport from './components/CSVImport'
 import LoginHistory from './components/LoginHistory'
+import AccountSettings from './components/AccountSettings'
 import './App.css'
 
 export default function App() {
@@ -21,6 +22,7 @@ export default function App() {
   const [showForm, setShowForm] = useState(false)
   const [editingExpense, setEditingExpense] = useState(null)
   const [activeTab, setActiveTab] = useState('dashboard')
+  const [notification, setNotification] = useState('')
   const [filterMonth, setFilterMonth] = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -60,6 +62,17 @@ export default function App() {
     }
   }, [user, loadExpenses, loadAuthHistory])
 
+  useEffect(() => {
+    if (!user) return
+    api.getProfile().then(setUser).catch(() => {})
+  }, [user?.email])
+
+  useEffect(() => {
+    if (!notification) return
+    const timeout = setTimeout(() => setNotification(''), 3000)
+    return () => clearTimeout(timeout)
+  }, [notification])
+
   const handleLoginSuccess = (userData) => setUser(userData)
 
   const handleLogout = async () => {
@@ -73,6 +86,9 @@ export default function App() {
     try {
       const row = await api.addExpense(data)
       setExpenses((prev) => [row, ...prev])
+      if (user?.notifyNewTransaction !== false) {
+        setNotification('New transaction added successfully.')
+      }
     } catch (error) {
       alert(error.message)
     }
@@ -212,6 +228,8 @@ export default function App() {
           <div className="data-loading">Loading your transactions...</div>
         ) : (
           <>
+            {notification && <div className="inline-toast">{notification}</div>}
+
             <Summary
               budget={budget}
               totalExpenses={totalExpenses}
@@ -233,6 +251,10 @@ export default function App() {
 
             {activeTab === 'transactions' && (
               <ExpenseList expenses={filteredExpenses} onEdit={handleEdit} onDelete={deleteExpense} />
+            )}
+
+            {activeTab === 'settings' && (
+              <AccountSettings user={user} onUserUpdate={setUser} />
             )}
 
             {activeTab === 'dashboard' && (

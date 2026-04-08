@@ -23,6 +23,25 @@ const clearSession = () => {
 }
 
 const getToken = () => getStoredValue('et_token')
+const getSessionStorageForToken = () => {
+  if (localStorage.getItem('et_token')) return localStorage
+  if (sessionStorage.getItem('et_token')) return sessionStorage
+  return null
+}
+
+const setUser = (user) => {
+  const storage = getSessionStorageForToken()
+  if (!storage) return
+  storage.setItem('et_user', JSON.stringify(user))
+}
+
+const syncUser = (patch) => {
+  const current = getUser() || {}
+  const next = { ...current, ...patch }
+  setUser(next)
+  return next
+}
+
 const getUser = () => {
   const raw = getStoredValue('et_user')
   if (!raw) return null
@@ -85,14 +104,72 @@ export const api = {
 
   async login(email, password, rememberMe) {
     const data = await request('POST', '/auth/login', { email, password, remember_me: rememberMe }, { handleUnauthorized: false })
-    persistSession(data.access_token, { email: data.email, rememberMe: data.remember_me }, data.remember_me)
+    persistSession(
+      data.access_token,
+      {
+        email: data.email,
+        rememberMe: data.remember_me,
+        emailVerified: data.email_verified,
+        notifyNewTransaction: data.notify_new_transaction,
+      },
+      data.remember_me,
+    )
     return data
   },
 
   async register(email, password, rememberMe) {
     const data = await request('POST', '/auth/register', { email, password, remember_me: rememberMe }, { handleUnauthorized: false })
-    persistSession(data.access_token, { email: data.email, rememberMe: data.remember_me }, data.remember_me)
+    persistSession(
+      data.access_token,
+      {
+        email: data.email,
+        rememberMe: data.remember_me,
+        emailVerified: data.email_verified,
+        notifyNewTransaction: data.notify_new_transaction,
+      },
+      data.remember_me,
+    )
     return data
+  },
+
+  async getProfile() {
+    const data = await request('GET', '/auth/profile')
+    return syncUser({
+      email: data.email,
+      emailVerified: data.email_verified,
+      notifyNewTransaction: data.notify_new_transaction,
+    })
+  },
+
+  async changePassword(currentPassword, newPassword) {
+    return request('POST', '/auth/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    })
+  },
+
+  async requestEmailVerification() {
+    return request('POST', '/auth/request-email-verification')
+  },
+
+  async verifyEmail(code) {
+    const data = await request('POST', '/auth/verify-email', { code })
+    return syncUser({
+      email: data.email,
+      emailVerified: data.email_verified,
+      notifyNewTransaction: data.notify_new_transaction,
+    })
+  },
+
+  async updateNotificationPreference(enabled) {
+    const data = await request('PATCH', '/auth/preferences', {
+      notify_new_transaction: enabled,
+    })
+    return syncUser({
+      email: data.email,
+      emailVerified: data.email_verified,
+      notifyNewTransaction: data.notify_new_transaction,
+    })
   },
 
   async forgotPassword(email) {

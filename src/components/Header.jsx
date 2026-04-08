@@ -44,6 +44,9 @@ export default function Header({ activeTab, setActiveTab, onAdd, user, onLogout 
           <button className={`nav-btn ${activeTab === 'transactions' ? 'active' : ''}`} onClick={() => setActiveTab('transactions')}>
             Transactions
           </button>
+          <button className={`nav-btn ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
+            Settings
+          </button>
         </nav>
 
         <div className="header-right">
