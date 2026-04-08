@@ -4,3 +4,7 @@ dist
 *.local
 .env
 .env.local
+backend/.venv
+*.db
+__pycache__/
+*.py[cod]

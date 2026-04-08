@@ -10,6 +10,13 @@ export default function Auth({ onSuccess }) {
   const [error, setError]     = useState('')
 
   const reset = () => setError('')
+  const formatError = (err) => {
+    const message = err?.message || 'Something went wrong.'
+    if (message === 'Failed to fetch') {
+      return 'Could not reach the API. Check VITE_API_URL and confirm the backend deployment is healthy.'
+    }
+    return message
+  }
 
   const handle = async (e) => {
     e.preventDefault()
@@ -24,7 +31,7 @@ export default function Auth({ onSuccess }) {
         : await api.register(email, password)
       onSuccess({ email: data.email })
     } catch (err) {
-      setError(err.message)
+      setError(formatError(err))
     }
     setLoading(false)
   }
