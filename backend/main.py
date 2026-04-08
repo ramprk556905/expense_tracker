@@ -2,7 +2,10 @@ from datetime import datetime, timedelta
 from typing import List
 import os
 import secrets
+import smtplib
 import uuid
+from email.message import EmailMessage
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +24,12 @@ TOKEN_EXPIRE_DAYS = 30
 SESSION_EXPIRE_HOURS = 12
 RESET_CODE_TTL_MINUTES = 15
 SESSION_TOUCH_INTERVAL_MINUTES = 5
+SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USERNAME = os.getenv("SMTP_USERNAME", "").strip()
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "").strip()
+SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", "").strip() or SMTP_USERNAME
+SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() not in {"0", "false", "no"}
 
 
 def _parse_cors_origins() -> list[str]:
@@ -238,6 +247,32 @@ def issue_password_reset(user: UserModel, db: Session):
     return reset_token
 
 
+def smtp_configured() -> bool:
+    return bool(SMTP_HOST and SMTP_PORT and SMTP_FROM_EMAIL)
+
+
+def send_email(subject: str, to_email: str, body: str):
+    if not smtp_configured():
+        return False, "Email delivery is not configured on the server."
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = SMTP_FROM_EMAIL
+    msg["To"] = to_email
+    msg.set_content(body)
+
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
+            if SMTP_USE_TLS:
+                server.starttls()
+            if SMTP_USERNAME and SMTP_PASSWORD:
+                server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.send_message(msg)
+        return True, None
+    except Exception as exc:
+        return False, str(exc)
+
+
 class AuthBody(BaseModel):
     email: EmailStr
     password: str
@@ -325,6 +360,20 @@ class ExpenseOut(ExpenseIn):
         from_attributes = True
 
 
+class DeploymentStatusOut(BaseModel):
+    status: str
+    database_engine: str
+    database_hint: str
+    database_connected: bool
+    sqlite_path: str | None = None
+    sqlite_file_exists: bool | None = None
+    sqlite_dir_writable: bool | None = None
+    render_disk_present: bool
+    smtp_configured: bool
+    smtp_missing_fields: list[str]
+    checked_at: datetime
+
+
 app = FastAPI(title="Expense Tracker API")
 
 app.add_middleware(
@@ -340,6 +389,69 @@ app.add_middleware(
 @app.get("/")
 def health():
     return {"status": "ok"}
+
+
+def database_hint(url: str) -> str:
+    if url.startswith("sqlite"):
+        return url
+    if "@" in url:
+        # Hide username/password for non-sqlite connection strings.
+        prefix, suffix = url.split("@", 1)
+        scheme = prefix.split("://", 1)[0] if "://" in prefix else "db"
+        return f"{scheme}://***@{suffix}"
+    return url
+
+
+def sqlite_file_path(url: str) -> str | None:
+    if not url.startswith("sqlite"):
+        return None
+    normalized = url
+    if normalized.startswith("sqlite+pysqlite://"):
+        normalized = normalized.replace("sqlite+pysqlite://", "sqlite://", 1)
+
+    raw_path = normalized.replace("sqlite:///", "", 1)
+    if raw_path.startswith("/"):
+        return raw_path
+    return str((Path.cwd() / raw_path).resolve())
+
+
+@app.get("/ops/deployment-status", response_model=DeploymentStatusOut)
+def deployment_status(db: Session = Depends(get_db)):
+    connected = True
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception:
+        connected = False
+
+    sqlite_path = sqlite_file_path(DATABASE_URL)
+    sqlite_file_exists = None
+    sqlite_dir_writable = None
+    if sqlite_path:
+        sqlite_file = Path(sqlite_path)
+        sqlite_file_exists = sqlite_file.exists()
+        sqlite_dir_writable = os.access(sqlite_file.parent, os.W_OK)
+
+    missing_smtp = []
+    if not SMTP_HOST:
+        missing_smtp.append("SMTP_HOST")
+    if not SMTP_FROM_EMAIL:
+        missing_smtp.append("SMTP_FROM_EMAIL")
+    if SMTP_USERNAME and not SMTP_PASSWORD:
+        missing_smtp.append("SMTP_PASSWORD")
+
+    return {
+        "status": "ok",
+        "database_engine": "sqlite" if DATABASE_URL.startswith("sqlite") else "external",
+        "database_hint": database_hint(DATABASE_URL),
+        "database_connected": connected,
+        "sqlite_path": sqlite_path,
+        "sqlite_file_exists": sqlite_file_exists,
+        "sqlite_dir_writable": sqlite_dir_writable,
+        "render_disk_present": Path("/var/data").exists(),
+        "smtp_configured": smtp_configured(),
+        "smtp_missing_fields": missing_smtp,
+        "checked_at": datetime.utcnow(),
+    }
 
 
 @app.post("/auth/register", response_model=TokenOut)
@@ -419,8 +531,25 @@ def request_email_verification(user: UserModel = Depends(current_user), db: Sess
     user.email_verification_code = code
     user.email_verification_expires_at = expires_at
     db.commit()
+
+    sent, send_error = send_email(
+        subject="ExpenseTracker email verification code",
+        to_email=user.email,
+        body=(
+            "Use this code to verify your email: "
+            f"{code}\n\n"
+            f"This code expires at {expires_at.isoformat()} UTC."
+        ),
+    )
+
+    if sent:
+        return {
+            "message": "Verification code sent to your email.",
+            "expires_at": expires_at,
+        }
+
     return {
-        "message": "Verification code created. Use it below to verify your email.",
+        "message": f"Verification code created, but email delivery failed ({send_error or 'unknown error'}). Use the code below.",
         "verification_code": code,
         "expires_at": expires_at,
     }
@@ -468,8 +597,24 @@ def forgot_password(body: ForgotPasswordBody, db: Session = Depends(get_db)):
         return {"message": "If the account exists, a reset code has been created."}
 
     reset_token = issue_password_reset(user, db)
+    sent, send_error = send_email(
+        subject="ExpenseTracker password reset code",
+        to_email=user.email,
+        body=(
+            "Use this code to reset your password: "
+            f"{reset_token.code}\n\n"
+            f"This code expires at {reset_token.expires_at.isoformat()} UTC."
+        ),
+    )
+
+    if sent:
+        return {
+            "message": "Reset code sent to your email. Use it below to set a new password.",
+            "expires_at": reset_token.expires_at,
+        }
+
     return {
-        "message": "Reset code created. Use it below to set a new password.",
+        "message": f"Reset code created, but email delivery failed ({send_error or 'unknown error'}). Use the code below.",
         "reset_code": reset_token.code,
         "expires_at": reset_token.expires_at,
     }

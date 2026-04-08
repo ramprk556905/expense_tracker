@@ -272,8 +272,8 @@ export default function Auth({ onSuccess }) {
 
             <div className="auth-reset-panel">
               <p className="auth-hint">
-                This project does not have email delivery configured yet, so the reset code is shown here after you
-                request it.
+                Request a reset code. If email delivery is configured, the code is sent to your inbox. If delivery
+                fails, the code will be shown here.
               </p>
               <form onSubmit={handleResetPassword} className="auth-form">
                 <div className="auth-field">
