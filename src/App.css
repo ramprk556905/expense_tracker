@@ -84,10 +84,12 @@
   justify-content: center;
   font-size: 13px;
   font-weight: 700;
+  border: none;
   cursor: pointer;
   user-select: none;
 }
 .user-menu:hover .user-dropdown { display: flex; }
+.user-menu.open .user-dropdown { display: flex; }
 .user-dropdown {
   display: none;
   flex-direction: column;
@@ -120,6 +122,10 @@
   font-weight: 500;
 }
 .logout-btn:hover { background: #fef2f2; }
+.logout-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
 
 /* ── Import toast ── */
 .import-toast {

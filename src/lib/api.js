@@ -42,7 +42,8 @@ const persistSession = (token, user, rememberMe) => {
   storage.setItem('et_user', JSON.stringify(user))
 }
 
-async function request(method, path, body) {
+async function request(method, path, body, options = {}) {
+  const { handleUnauthorized = true } = options
   const token = getToken()
   const headers = { 'Content-Type': 'application/json' }
   if (token) headers.Authorization = `Bearer ${token}`
@@ -58,9 +59,12 @@ async function request(method, path, body) {
   const data = isJson ? await response.json().catch(() => ({})) : null
 
   if (response.status === 401) {
-    clearSession()
-    window.location.reload()
-    return
+    if (handleUnauthorized) {
+      clearSession()
+      window.location.reload()
+      return
+    }
+    throw new Error(data?.detail || 'Unauthorized')
   }
 
   if (!response.ok) throw new Error(data?.detail || `Request failed (${response.status})`)
@@ -80,19 +84,19 @@ export const api = {
   getUser,
 
   async login(email, password, rememberMe) {
-    const data = await request('POST', '/auth/login', { email, password, remember_me: rememberMe })
+    const data = await request('POST', '/auth/login', { email, password, remember_me: rememberMe }, { handleUnauthorized: false })
     persistSession(data.access_token, { email: data.email, rememberMe: data.remember_me }, data.remember_me)
     return data
   },
 
   async register(email, password, rememberMe) {
-    const data = await request('POST', '/auth/register', { email, password, remember_me: rememberMe })
+    const data = await request('POST', '/auth/register', { email, password, remember_me: rememberMe }, { handleUnauthorized: false })
     persistSession(data.access_token, { email: data.email, rememberMe: data.remember_me }, data.remember_me)
     return data
   },
 
   async forgotPassword(email) {
-    return request('POST', '/auth/forgot-password', { email })
+    return request('POST', '/auth/forgot-password', { email }, { handleUnauthorized: false })
   },
 
   async resetPassword(email, code, newPassword) {
@@ -100,12 +104,12 @@ export const api = {
       email,
       code,
       new_password: newPassword,
-    })
+    }, { handleUnauthorized: false })
   },
 
   async logout() {
     try {
-      await request('POST', '/auth/logout')
+      await request('POST', '/auth/logout', undefined, { handleUnauthorized: false })
     } catch {
       // Best-effort logout: local cleanup still matters if the backend session is already gone.
     } finally {
